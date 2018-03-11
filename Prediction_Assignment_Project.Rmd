@@ -1,0 +1,108 @@
+---
+title: "Prediction Assignment"
+author: "ziur.nauj"
+date: "March 9, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, my goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. 
+
+
+# 1. Loading and cleaning the data
+
+I am assuming the data was properly downloaded and stored in the working folder 
+
+## 1.1 Load the training and testing dataset
+
+```{r}
+training_data <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+testing_data <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+```
+
+
+## 1.2 Preparing the data
+
+By inspection of the testing data, there are a few variables that we don't have data (i.e. NA). These variables will not be able to be used for the prediction and that is why I will remove them from the training dataset. The variable X is also not important as well as timestamp data. I will assume that user_name and new_window and num_windows would not have a significant impact in the prediction (this should be confirmed later on).
+
+```{r}
+testing_data_no_na <- testing_data[,colSums(is.na(testing_data))<nrow(testing_data)]
+testing_data_final <- testing_data_no_na[7:59] 
+variables <- names(testing_data_final)
+training_data_final <- training_data[,c("classe", variables)]
+```
+
+
+# 2. Developing the model
+
+In this section I will describe how I will develop a predictive model.
+
+
+## 2.1 Data preparation for cross validation
+In order to have a way to test my model (check accuracy) before using it to predict outcomes from the test set provided, I will use the holdout method (cross validation method). In this method the training data is split into a subset for training and another for testing. In this particular case I will use (70%/30%) split. A more involved cross validation analysis could be developed using the k-fold method.
+
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+```
+```{r}
+set.seed(1000)
+inTrain <- createDataPartition(training_data_final$classe, p=0.7, list=FALSE)
+internal_training <- training_data_final[inTrain,]
+internal_testing <- training_data_final[-inTrain,]
+```
+
+## 2.2 Choosing and training the model
+
+Random Forest models have shown to be useful in these type of problems. With this in mind I will start my analysis by proposing a random forest model and checking its out of sample expected error. If this error is small enough I will use it for the testing data (20 samples). Otherwise, I will analyze other options such the gradient boosting method (gbm). 
+
+Notice that I will use the randomForest function from the randomForest package.  
+
+```{r, message=FALSE, warning=FALSE}
+library(randomForest)
+```
+
+```{r}
+model_rf <- randomForest(classe ~ ., data = internal_training)
+```
+
+## 2.3 Testing model accuracy and predicting expected out of sample error
+
+In order to test the model accuracy and predict the out of sample error I will use the data from the training set that was separated for the internal testing. With this in mind I will predict the outcome of the internal_testing set and use the confusion matrix to define the accuracy. 
+
+```{r}
+prediction <- predict(model_rf, internal_testing, type = "class")
+confusionMatrix(prediction, internal_testing$classe)
+```
+
+As it can be seen the prediction error is quite good (smaller than 1%). I will accept this model and use it for the testing data set (20 samples)
+
+# 3. Prediction on Testing data set
+
+For the prediction of the testing data set I will use the model that was generated and validated in the previous section.
+
+
+```{r}
+testing_set_prediction <- predict(model_rf, testing_data_final, type = "class")
+testing_set_prediction
+```
+
+
+# 4. Conclusions
+
+In this report I presented step by step how I generated and validated a predition model to predict the barbell lifts behavior by looking at data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. Based on the quiz example the model seems to perform very well as it is able to predict every single outcome properly.
